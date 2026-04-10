@@ -1,0 +1,24 @@
+cam_id=8
+# Thông số cảm biến và độ phân giải
+sensor_w=0.00718
+sensor_h=0.00404
+res_w_max=3840
+res_h_max=2160
+frames_per_sec=30
+
+# Giới hạn góc quay (độ)
+left_azimuth_max=-180.0
+right_azimuth_max=180.0
+down_elevation_max=-90.0
+up_elevation_max=90.0
+
+# Tiêu cự và tầm xa
+focal_length_min=0.006
+focal_length_max=0.150
+recog_range_max=800.0
+catch_obj_scale=1.0
+
+# Vị trí lắp đặt
+pos_x=-60.0
+pos_y=2.5
+pos_z=60.0
