@@ -13,7 +13,7 @@
 
 /*==========DRONE'S CONSTANTS==========*/
 const double TIMESTEP = 1.0/30.0; /* (1/sample frequency), sample freq max is PARTIAL_PATH_IN_EACH_SEGMENT */
-const int DRONE_INTIAL_SPPED = 0; /* m/s ,in case velocity = const*/
+const int DRONE_INITIAL_SPEED = 0; /* m/s ,in case velocity = const*/
 const int DRONE_INITIAL_ACC = 12;
 const int DRONE_MAX_SPEED = 40;
 const double DRONE_RADIUS = 1.0;
@@ -33,7 +33,7 @@ const int REACQUIRE_THRESHOLD_FRAMES = 30;
 const int TRACKING_THRESHOLD_FRAMES = 5;
 const double ALG_PROCESSING_TIMESTEP = TIMESTEP;
 const double ROT_CAM_LEADING_TIME = TIMESTEP * 6;
-const int PF_PARTICLES_NUMBER = 500;
+const int PF_PARTICLES_NUMBER = 1000;
 
 const int LATENCY = 3; /* 3 frames late*/
 const int LEAD_FRAMES_NUMBER = 6; /*filter estimates 6 frames forward*/
@@ -43,6 +43,17 @@ struct LostObjFrame {
     int frame;
     Eigen::Vector3d pos;
     std::vector<Pixel_Obj> list;
+};
+
+struct LostTimePerFrameInfo{
+    int reacquire_count = 0;
+    int reacquire_cam_numbers;
+} ;
+struct LostFrameInfo {
+    int frame;
+    int lost_count = 0;
+    std::vector<LostTimePerFrameInfo> lost_time_info;
+    bool isSuccess; /*False -> lost obj | true -> reacquire succesfully*/
 };
 /*========================================================================*/
 
@@ -96,6 +107,7 @@ class Simulation {
 
     public:
         Simulation();
+        std::vector<LostFrameInfo> lost_frame_list_info; /*Information of each obj list*/
         SimulationResult getResult(){return result;}
         void do_simulate();
         void show_result();

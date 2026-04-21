@@ -104,3 +104,31 @@ void drone_motion_to_json(Time_Based_Traj time_traj, const std::string& filename
 
     file << "\n  ]\n}\n";
 }
+
+/*for plotting estimated traj*/
+void export_trajectories_to_json(
+    const std::vector<Eigen::Vector3d>& est_traj, 
+    const std::string& filename) 
+{
+    json j;
+
+    auto vector_to_json = [](const std::vector<Eigen::Vector3d>& traj) {
+        json j_list = json::array();
+        for (const auto& v : traj) {
+            j_list.push_back({v.x(), v.y(), v.z()});
+        }
+        return j_list;
+    };
+
+    j["est_pos"] = vector_to_json(est_traj);
+
+    std::ofstream file(filename);
+    if (file.is_open()) {
+        file << j.dump(4); 
+        file.close();
+        // std::cout << "Successfully exported trajectories to " << filename << std::endl;
+    } else {
+        std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
+    }
+}
+

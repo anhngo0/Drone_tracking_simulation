@@ -19,60 +19,6 @@ void point_all_cameras_to_object(std::vector<Camera>& cameras, const Eigen::Vect
     }
 }
 
-/*for plotting estimated traj*/
-void export_trajectories_to_json(
-    const std::vector<Eigen::Vector3d>& est_traj, 
-    const std::string& filename) 
-{
-    json j;
-
-    auto vector_to_json = [](const std::vector<Eigen::Vector3d>& traj) {
-        json j_list = json::array();
-        for (const auto& v : traj) {
-            j_list.push_back({v.x(), v.y(), v.z()});
-        }
-        return j_list;
-    };
-
-    j["est_pos"] = vector_to_json(est_traj);
-
-    std::ofstream file(filename);
-    if (file.is_open()) {
-        file << j.dump(4); 
-        file.close();
-        // std::cout << "Successfully exported trajectories to " << filename << std::endl;
-    } else {
-        std::cerr << "Error: Could not open file " << filename << " for writing." << std::endl;
-    }
-}
-
-/* same as the above function, adding color intersection*/
-void export_intersection_json(
-    std::vector<Polyhedron>& fov_polys,
-    const Polyhedron& target_intersection,
-    const Point& O,
-    const std::string& filename
-) {
-    json J;
-
-    // ===== polyhedra =====
-    J["polyhedra"] = json::object();
-    int i = 1;
-    for(Polyhedron pol : fov_polys){
-        std::string cam_id = std::to_string(i++); 
-        polyhedron_to_json(pol, J["polyhedra"][cam_id]);
-    }
-    polyhedron_to_json(target_intersection, J["intersection"]["intersect"]);
-
-    J["intersection"]["O"] = { 
-        CGAL::to_double(O.x()), 
-        CGAL::to_double(O.y()), 
-        CGAL::to_double(O.z()) 
-    };
-    
-    std::ofstream(filename) << J.dump(2);
-}
-
 void export_pf_json(
     std::vector<Polyhedron>& fov_polys,
     std::vector<Particle> particles,
@@ -172,8 +118,8 @@ Simulation::Simulation(){
         cameras.push_back(Cam2);
         cameras.push_back(Cam3);
         cameras.push_back(Cam4);
-        cameras.push_back(Cam5);
-        cameras.push_back(Cam6);
+        // cameras.push_back(Cam5);
+        // cameras.push_back(Cam6);
         // cameras.push_back(Cam7);
         // cameras.push_back(Cam8);
         /*================================================================*/
@@ -192,7 +138,7 @@ Simulation::Simulation(){
 
         Time_Based_Traj time_based_trajectory(traj);
         time_based_trajectory.setTimeStep(TIMESTEP);
-        time_based_trajectory.setVelocity(DRONE_INTIAL_SPPED);
+        time_based_trajectory.setVelocity(DRONE_INITIAL_SPEED);
         time_based_trajectory.setAcceleration(DRONE_INITIAL_ACC);
         time_based_trajectory.setMaxSpeed(DRONE_MAX_SPEED);
 
@@ -233,8 +179,6 @@ void Simulation::do_simulate(){
     bool is_initialized = false;  /* for initializing ukf state and pf state*/
     int one_cam_seen_obj_frame_count = 0; /*Scan if only one camera sees object continously*/
 
-    bool is_recently_initialized = false; /* to disable chi square in ukf update for first 10 frames */
-    int recently_initialized_count = 0; 
     bool is_intersection_initial_plot = false; /*After compute the intersection of fovs in the 1st loop, this value becomes true*/
 
     /*For delayed traj frame*/
@@ -245,9 +189,13 @@ void Simulation::do_simulate(){
 
     Eigen::Vector3d current_position(0,0,0); /* (current frame -- LATENCY) position*/
 
+    /*For debugging*/
     bool is_json_pf = false;
     int count_pf = 0;
     int reacquire_frame_count = 0; /*For remaining stable status after reacquire successfully*/
+    bool is_require_state_initialized = false;
+    int focus_time_per_frame_count = 0;
+    LostFrameInfo lost_frame_info; /*For debug lost frame */
 
     point_all_cameras_to_object(cameras, traj[0].pos);
 
@@ -314,23 +262,23 @@ void Simulation::do_simulate(){
             {
             
                 /*Print lost frame list on console for debugging*/
-                // std::cout << "[DEBUG] Lost target at frame " << current_frame << std::endl;
+                std::cout << "[DEBUG] Lost target at frame " << current_frame << std::endl;
                 // std::cout << "Real position: (" << traj[current_frame].pos[0] << ", " 
                 //             << traj[current_frame].pos[1] << ", "
                 //             << traj[current_frame].pos[2] << ")\n";
-                LostObjFrame lost_frame;
-                lost_frame.frame = current_frame;
-                lost_frame.pos = traj[current_frame].pos;
+                // LostObjFrame lost_frame;
+                // lost_frame.frame = current_frame;
+                // lost_frame.pos = traj[current_frame].pos;
 
-                for(auto& cam : cameras) {
-                    cam.calculate_pixel_projection(traj[current_frame].pos, DRONE_RADIUS);
-                    // std::cout << "cam " << cam.getID() << " pos: (" << cam.get_camera_angles().azimuth * 180 / M_PI
-                    //             << ", " << cam.get_camera_angles().elevation * 180 / M_PI<< ") | (u,v) = (" 
-                    //     << cam.pix_info.u << ", " << cam.pix_info.v <<")\n";
-                    Pixel_Obj pix = cam.pix_info;
-                    lost_frame.list.push_back(pix);
-                }
-                lost_frame_list.push_back(lost_frame);
+                // for(auto& cam : cameras) {
+                //     cam.calculate_pixel_projection(traj[current_frame].pos, DRONE_RADIUS);
+                //     // std::cout << "cam " << cam.getID() << " pos: (" << cam.get_camera_angles().azimuth * 180 / M_PI
+                //     //             << ", " << cam.get_camera_angles().elevation * 180 / M_PI<< ") | (u,v) = (" 
+                //     //     << cam.pix_info.u << ", " << cam.pix_info.v <<")\n";
+                //     Pixel_Obj pix = cam.pix_info;
+                //     lost_frame.list.push_back(pix);
+                // }
+                // lost_frame_list.push_back(lost_frame);
 
                 /*RECOVERY AFTER SCANNING*/
                 result.pf_penalty_count++; /*scanning time*/
@@ -355,14 +303,11 @@ void Simulation::do_simulate(){
                         init_state(6) = CGAL::to_double(start_pt.z());
                         ukf.setState(init_state);
                         ukf.setCovariance(Eigen::MatrixXd::Identity(9, 9) * 1000.0);
-
-                        recently_initialized_count = 0;
                     }
                     is_initialized = true;
                 }
 
-                ukf.predict(); /*answer "if there is no n                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               ew measurement, what is obj's position right now"*/
-                is_recently_initialized = recently_initialized_count < 10 ? true: false;
+                ukf.predict(); /*answer "if there is no n */                                    
                 if(cameras_seen_obj > 0){
                     ukf.update(obj_visible_cameras); /*best estimation right now & answer "what measurements think about state we've predicted yet"*/
                 }
@@ -372,7 +317,7 @@ void Simulation::do_simulate(){
                 lead.covariance = ukf.getCovariance();
                 // Early frame → lead 1 frame
                 // if (is_recently_initialized) {
-                    lead = ukf.getLeadState(TIMESTEP, ACC_DEVIATION);
+                    // lead = ukf.getLeadState(TIMESTEP, ACC_DEVIATION);
                 // }
                 // // Late frame → lead latency camera
                 // else {
@@ -424,25 +369,25 @@ void Simulation::do_simulate(){
                 }
 
                 /*print camera tracking state on console*/
-                // std::cout << "[" << current_frame << "] UKF mean: (" << px << ", " << py << ", " << pz << ")" ;
-                // std::cout << " | Cams: " << obj_visible_cameras.size() <<  std::endl;
-                // std::cout << "Real position: (" << traj[current_frame].pos[0] << ", " 
-                //             << traj[current_frame].pos[1] << ", "
-                //             << traj[current_frame ].pos[2] << ") | " 
-                //             << "rmse is " << rmse_frame.rmse << "\n";
-                // for(auto cam_print : obj_visible_cameras){
-        
-                //     Camera* cam_tes = cam_print; 
-                //     CameraAngles current = cam_tes->get_camera_angles();
-                //     CameraAngles target = cam_tes->get_total_object_to_cam_angles();
-                //     std::cout 
-                //             << "[Visible] Cam "<< cam_tes->getID() <<" Pos: (" << current.azimuth * 180 / M_PI << ", " << current.elevation * 180 / M_PI << ") | "
-                //             << "Target: (" << target.azimuth * 180 / M_PI << ", " << target.elevation * 180 / M_PI << ") | "
-                //             << "Diff: (" << (target.azimuth - current.azimuth) * 180 / M_PI << ") | (u,v) = (" 
-                //             << cam_tes->pix_info.u << ", " << cam_tes->pix_info.v << ")\n";
-                // }
+                std::cout << "[" << current_frame << "] UKF mean: (" << px << ", " << py << ", " << pz << ")" ;
+                std::cout << " | Cams: " << obj_visible_cameras.size() <<  std::endl;
+                std::cout << "Real position: (" << traj[current_frame].pos[0] << ", " 
+                            << traj[current_frame].pos[1] << ", "
+                            << traj[current_frame ].pos[2] << ") | " 
+                            << "rmse is " << rmse_frame.rmse << "\n";
+
+                for(auto cam_print : obj_visible_cameras){
+                    Camera* cam_tes = cam_print; 
+                    CameraAngles current = cam_tes->get_camera_angles();
+                    CameraAngles target = cam_tes->get_total_object_to_cam_angles();
+                    std::cout 
+                            << "[Visible] Cam "<< cam_tes->getID() <<" Pos: (" << current.azimuth * 180 / M_PI << ", " << current.elevation * 180 / M_PI << ") | "
+                            << "Target: (" << target.azimuth * 180 / M_PI << ", " << target.elevation * 180 / M_PI << ") | "
+                            << "Diff: (" << (target.azimuth - current.azimuth) * 180 / M_PI << ") | (u,v) = (" 
+                            << cam_tes->pix_info.u << ", " << cam_tes->pix_info.v << ")\n";
+                }
+
                 // for(auto cam_print : obj_hidden_cameras){
-        
                 //     Camera* cam_tes = cam_print; 
                 //     CameraAngles current = cam_tes->get_camera_angles();
                 //     CameraAngles target = cam_tes->get_total_object_to_cam_angles();
@@ -456,6 +401,7 @@ void Simulation::do_simulate(){
                 if(one_cam_seen_obj_frame_count >= TRACKING_THRESHOLD_FRAMES) {
                     is_initialized = false;
                     state = REACQUIRE_STATE;
+                    lost_frame_info.lost_time_info.clear();
                 } 
                 break;
             }
@@ -477,6 +423,11 @@ void Simulation::do_simulate(){
                 if(!is_initialized){
                     pf.init_particles_from_ukf(ukf.getState(), P);
                     is_initialized = true;
+
+                    /*=================================================================*/
+                    /* THIS FOR DEBUG */
+                    lost_frame_info.frame = current_frame;
+                    /*=================================================================*/
                 }
 
                 /*predict and update based on gaussian state pf*/
@@ -488,9 +439,12 @@ void Simulation::do_simulate(){
                 
                 // ===== SWITCH MODE =====
                 if (!obj_visible_cameras.empty())
+                {
                     reacquire_mode = FOCUS_MODE;
-                else 
+                }
+                else {
                     reacquire_mode = SEARCH_MODE;
+                }
                 
                 GaussState rmse_state;
                 rmse_state.mean = pf.get_estimated_state();
@@ -506,9 +460,9 @@ void Simulation::do_simulate(){
                 // ===== SEARCH MODE =====
                 if (reacquire_mode == SEARCH_MODE)
                 {
+                    is_require_state_initialized = false;
                     // ===== GMM =====
                     auto gmm = fit_gmm_em(pf.get_particles(), CLUSTERING_NUMBER, 5);
-                    // std::cout << "start search mode in reacquire state\n";
 
                     // sort hypotheses based on weight
                     std::vector<int> order(gmm.size());
@@ -538,6 +492,17 @@ void Simulation::do_simulate(){
                 // ===== FOCUS MODE =====
                 else if (reacquire_mode == FOCUS_MODE)
                 {
+                    /*================== FOR DEBUG =============================*/
+                    if(!is_require_state_initialized){
+                        LostTimePerFrameInfo lost_time_per_frame_info;
+                        focus_time_per_frame_count++;
+                        lost_time_per_frame_info.reacquire_count = focus_time_per_frame_count;
+                        lost_time_per_frame_info.reacquire_cam_numbers = cameras_seen_obj;
+                        lost_frame_info.lost_time_info.push_back(lost_time_per_frame_info);
+                        is_require_state_initialized = true;
+                        std::cout << "lost_time_per_frame_info is "<< lost_time_per_frame_info.reacquire_count << "\n";
+                    }
+                    /*==============================================================*/
                     pf.resample_if_needed();
                     Eigen::VectorXd state_pf = pf.get_estimated_state();
 
@@ -552,7 +517,6 @@ void Simulation::do_simulate(){
 
                     temp_det_rmse_list.push_back(rmse_frame);
                 }
-
                 
                 /*============= FOR PLOTTING ===============*/
                 auto state_pf = pf.get_estimated_state();
@@ -593,9 +557,7 @@ void Simulation::do_simulate(){
                     count_pf++;
                 }
 
-                if(is_recently_initialized) 
-                    recently_initialized_count++;
-
+                /*Change state to tracking state*/
                 if (obj_visible_cameras.size() >= 4)
                 {   
                     reacquire_frame_count = 0;
@@ -605,16 +567,24 @@ void Simulation::do_simulate(){
                     ukf.setState(conv_state.mean);
                     ukf.setCovariance(conv_state.covariance);
                     is_json_pf = true;
+                    lost_frame_info.isSuccess = true;
+                    lost_frame_list_info.push_back(lost_frame_info);
+                    focus_time_per_frame_count = 0;
 
                     for(auto& rmse_f : temp_det_rmse_list)
                         result.rmse_list_det_succ.push_back(rmse_f);
                     temp_det_rmse_list.clear();
                 } 
+
+                /*Change state to reset state*/
                 if(reacquire_frame_count > REACQUIRE_THRESHOLD_FRAMES)
                 {
                     state = RESET_STATE; 
                     is_json_pf = true; 
                     reacquire_frame_count = 0;
+                    lost_frame_info.isSuccess = false;
+                    lost_frame_list_info.push_back(lost_frame_info);
+                    focus_time_per_frame_count = 0;
 
                     for(auto& rmse_f : temp_det_rmse_list)
                         result.rmse_list_det_fail.push_back(rmse_f);
@@ -666,4 +636,29 @@ void Simulation::show_result(){
             std::cout << "pixel info u is " << lost_obj.u << " and v is " << lost_obj.v << "\n";
         }
     }
+    std::cout << "==================================\n";
+    int reacquire_fail_with_no_focus_state_count = 0;
+    int reacquire_fail_with_focus_state_count = 0;
+
+    for(auto curFrame : lost_frame_list_info){
+        std::string reacuire_state = curFrame.isSuccess ? "Success" : "False";
+        std::cout << "[Frame : " << curFrame.frame << "] | " 
+                    << "[Reacquie : " << reacuire_state << "] | \n";
+        std::cout << "number of lost time in a frame is " << curFrame.lost_time_info.size() << "\n";  
+        for (auto lost_obj: curFrame.lost_time_info)
+        { 
+            std::cout << "reacuire time " << lost_obj.reacquire_count 
+            << " and number of camera can see is " << lost_obj.reacquire_cam_numbers << "\n";
+        }
+
+        if(!curFrame.isSuccess){
+            if(curFrame.lost_time_info.size() > 0)
+                reacquire_fail_with_focus_state_count++;
+            else 
+                reacquire_fail_with_no_focus_state_count++;
+        }
+    }
+    std::cout << "\nreacquire_fail_with_focus_state_count is " << reacquire_fail_with_focus_state_count 
+            << " |\n reacquire_fail_with_no_focus_state_count is " << reacquire_fail_with_no_focus_state_count
+            << std::endl;
 }

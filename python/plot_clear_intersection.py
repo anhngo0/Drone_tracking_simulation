@@ -110,10 +110,10 @@ scatter3(ax,points[:,0], points[:,1], points[:,2],
 
 # #========== Camera =========
 cameras = np.array([
-    [0, 2.5, 0],    # Camera 1
-    [60, 2.5, 0],   # Camera 2
-    [60, 2.5, 60],  # Camera 3
-    [0, 2.5, 60]    # Camera 4
+    [30, 2.5, 30],    # Camera 1
+    [-30, 2.5, 30],   # Camera 2
+    [30, 2.5, -30],  # Camera 3
+    [-30, 2.5, -30]    # Camera 4
 ])
 
 scatter3(ax,
@@ -167,8 +167,8 @@ for x, y, z in est_data["est_pos"]:
 est_traj = np.array(est_traj)
 
 # spline trajectory
-# scatter3(ax,est_traj[:,0], est_traj[:,1], est_traj[:,2],
-#         color="blue", s = 5, label="estimate trajectory")
+scatter3(ax,est_traj[:,0], est_traj[:,1], est_traj[:,2],
+        color="blue", s = 5, label="estimate trajectory")
 # plot3(ax,est_traj[:,0], est_traj[:,1], est_traj[:,2],
 #         color="blue", linewidth=2, label="estimate trajectory")
 # ================= 10 evenly spaced centers =================

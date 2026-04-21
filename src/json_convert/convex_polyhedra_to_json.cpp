@@ -1,7 +1,6 @@
 #include "../../include/json_convert/convex_polyhedra_to_json.hpp"
 
 
-/*plot DK hierarchy animation*/
 PointKey key(const Point& p) {
     double point_x = CGAL::to_double(p.x());
     double point_y = CGAL::to_double(p.y());
@@ -100,34 +99,30 @@ void polyhedron_to_json(
     }
 }
 
-/*Plot 2 polyhedra with a point inside their intersection*/
-void export_scene_json(
-    const Polyhedron& P,
-    const Polyhedron& Q,
+/* same as the above function, adding color intersection*/
+void export_intersection_json(
+    std::vector<Polyhedron>& fov_polys,
+    const Polyhedron& target_intersection,
     const Point& O,
-    const bool intersects,
     const std::string& filename
 ) {
     json J;
 
     // ===== polyhedra =====
     J["polyhedra"] = json::object();
-
-    polyhedron_to_json(P, J["polyhedra"]["P"]);
-    polyhedron_to_json(Q, J["polyhedra"]["Q"]);
-
-    // ===== intersection =====
-
-    J["intersection"]["exists"] = intersects;
-
-    if (intersects) {
-        J["intersection"]["O"] = { 
-            CGAL::to_double(O.x()), 
-            CGAL::to_double(O.y()), 
-            CGAL::to_double(O.z()) 
-        };
+    int i = 1;
+    for(Polyhedron pol : fov_polys){
+        std::string cam_id = std::to_string(i++); 
+        polyhedron_to_json(pol, J["polyhedra"][cam_id]);
     }
+    polyhedron_to_json(target_intersection, J["intersection"]["intersect"]);
 
+    J["intersection"]["O"] = { 
+        CGAL::to_double(O.x()), 
+        CGAL::to_double(O.y()), 
+        CGAL::to_double(O.z()) 
+    };
+    
     std::ofstream(filename) << J.dump(2);
 }
 

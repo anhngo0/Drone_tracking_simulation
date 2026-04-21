@@ -39,21 +39,10 @@ void polyhedron_to_json(
     json& Jpoly
 );
 
-void export_scene_json(
-    const Polyhedron& P,
-    const Polyhedron& Q,
-    const Point& O,
-    const bool intersects,
-    const std::string& filename
-);
-
-/* same as the above function, adding color intersection*/
 void export_intersection_json(
     std::vector<Polyhedron>& fov_polys,
     const Polyhedron& target_intersection,
     const Point& O,
     const std::string& filename
-) ;
-
-
+);
 

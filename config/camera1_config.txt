@@ -20,11 +20,11 @@ catch_obj_scale=1.0
 
 # Vị trí lắp đặt
 # 4 or 8 cameras
-#pos_x=-30.0
-#pos_y=2.5
-#pos_z=-30.0
+pos_x=-30.0
+pos_y=2.5
+pos_z=-30.0
 
 #6 cameras
-pos_x=42.4264
-pos_y=2.5
-pos_z=0.0
+#pos_x=42.4264
+#pos_y=2.5
+#pos_z=0.0

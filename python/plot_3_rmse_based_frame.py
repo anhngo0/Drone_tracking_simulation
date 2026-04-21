@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # ===== Config =====
 files = [
-    ("../rmse_based_frame_tracking_0_00873_8.json", "σ = 0.5°", "black"),
+    # ("../rmse_based_frame_tracking_0_00873.json", "σ = 0.5°", "black"),
     ("../rmse_based_frame_tracking_0_01745_8.json", "σ = 1°", "red"),
     ("../rmse_based_frame_tracking_0_035_8.json", "σ = 2°", "blue"),
 ]

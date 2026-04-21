@@ -7,7 +7,7 @@
 
 using json = nlohmann::json;
 
-const size_t PARTIAL_PATH_IN_EACH_SEGMENT = 300; /*number points of each segment  */
+const size_t PARTIAL_PATH_IN_EACH_SEGMENT = 1500; /*number points of each segment  */
 const size_t MAX_SPEED = 25; /*100 m/s = 360 km/h*/
 
 /*U is interpolated param which is used to interpolated trajectory*/

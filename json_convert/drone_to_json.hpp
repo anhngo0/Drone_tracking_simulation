@@ -14,3 +14,7 @@ const std::string& filename);
 
 /*============== TIME-BASED TRAJECTORY ===============*/
 void drone_motion_to_json(Time_Based_Traj time_traj, const std::string& filename);
+
+void export_trajectories_to_json(
+    const std::vector<Eigen::Vector3d>& est_traj, 
+    const std::string& filename);

@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # ===== 1. Load JSON file =====
-with open("../rmse_based_frame_tracking_0_035_6.json", "r") as f:
+with open("../rmse_based_frame_tracking_0_035_8.json", "r") as f:
     data = json.load(f)
 
 rmse_data = data["rmse_per_frame"]

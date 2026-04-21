@@ -19,11 +19,11 @@ recog_range_max=800.0
 catch_obj_scale=1.0
 
 # Vị trí lắp đặt
-#pos_x=-60.0
-#pos_y=2.5
-#pos_z=-60.0
+pos_x=-60.0
+pos_y=2.5
+pos_z=-60.0
 
 #6 cameras
-pos_x=-21.2132
-pos_y=2.5
-pos_z=-36.74235
+#pos_x=-21.2132
+#pos_y=2.5
+#pos_z=-36.74235

@@ -126,7 +126,6 @@ class Camera {
 
         CameraAngles get_half_fov_angles() const;
 
-        // DKHierarchy get_dk_hierarchy() const;
         void initial_fov();
 
         CameraAngles calculate_angles_to(Point target_p);

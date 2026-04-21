@@ -15,8 +15,9 @@ struct GaussState {
     Eigen::MatrixXd covariance;
 };
 
-/*angle (rad) | 0.001 rad \approx 0.0573 deg, when convert to pixel, it approximates 80pix */
-const double MEASUREMENT_DEVIATION =  0.035; 
+/*angle (rad) | 0.001 rad \approx 0.0573 deg, when convert to pixel, it approximates 80pix,
+ 0.01745 rad \approx 1 deg , 1396 pixel */
+const double MEASUREMENT_DEVIATION =  0.026175; 
 
 class UnscentedKalmanFilter {
 public:
@@ -123,10 +124,10 @@ public:
     /*For rotating object hidden camera*/
     std::vector<Particle> get_particles(){return particles;};
 
-    void update_weights(
-    std::vector<Camera*>& visible_cams,
-    std::vector<Camera*>& hidden_cams
-    );
+    // void update_weights(
+    // std::vector<Camera*>& visible_cams,
+    // std::vector<Camera*>& hidden_cams
+    // );
 
     void update_weights_focus(
     std::vector<Camera*>& visible_cams,

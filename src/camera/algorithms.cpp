@@ -132,10 +132,10 @@ void UnscentedKalmanFilter::predict() {
     P += Q;
 }
 
+/*return innovation for debugging*/
 void UnscentedKalmanFilter::update(std::vector<Camera*>& cameras)
 {
     int num_cams = cameras.size();
-    if (num_cams == 0) return;
 
     int n_z = 2 * num_cams;
 
@@ -219,6 +219,17 @@ void UnscentedKalmanFilter::update(std::vector<Camera*>& cameras)
     }
 
     Eigen::VectorXd y = z_meas - z_pred;
+    std::vector<double> innovations;
+    std::cout << "innovations of visible cameras are ";
+    for (int c = 0; c < num_cams; c++)
+    { 
+        double inno = (z_meas(2 * c) - z_pred(2*c)) * (z_meas(2 * c) - z_pred(2*c)) + 
+                        (z_meas(2*c+1) - z_pred(2*c+1)) * (z_meas(2*c+1) - z_pred(2*c+1));
+        innovations.push_back(inno);
+        std::cout << inno << " || ";
+    }
+    std::cout << "\n";
+    // std::cout << "innovation of this frame is " << innovation_pos.norm() << std::endl;
 
     for (int c = 0; c < num_cams; ++c)
         normalize_angle(y(2 * c + 1));
@@ -390,7 +401,7 @@ void ParticleFilter::update_weights_focus(
     std::vector<Camera*>& visible_cams,
     std::vector<Camera*>& hidden_cams)
 {
-    const double sigma = MEASUREMENT_DEVIATION; // ~3 deg
+    const double sigma = MEASUREMENT_DEVIATION; 
 
     std::vector<double> log_weights(particles.size());
 
@@ -402,112 +413,71 @@ void ParticleFilter::update_weights_focus(
 
         double log_w = std::log(p.weight + 1e-12);
 
-        // ===== 1. ANGLE LIKELIHOOD (MAIN) =====
-        for (auto* cam : visible_cams)
-        {
-            Eigen::Vector3d cam_pos = cam->getPosition();
+        if(visible_cams.size() != 0){
+            
+            for (auto* cam : visible_cams)
+            {
+                // ===== 1. FOV constraint (secondary) =====
+                bool inside = is_point_inside_polyhedron(
+                    cam->get_FOV(), Point(pos.x(), pos.y(), pos.z()));
+    
+                if(!inside) 
+                    // log_w += std::log(1e-3);
+                    log_w += std::log(1e-4); /*gain panalty */
+                else {
 
-            Eigen::Vector3d d = pos - cam_pos;
-
-            double dx = d.x();
-            double dy = d.y();
-            double dz = d.z();
-
-            double r = std::sqrt(dx*dx + dz*dz + 1e-6);
-
-            double pred_el = std::atan2(dy, r);
-            double pred_az = std::atan2(dx, dz);
-
-            auto ang = cam->get_total_object_to_cam_angles();
-
-            double d_el = pred_el - ang.elevation;
-            double d_az = pred_az - ang.azimuth;
-
-            normalize_angle(d_az);
-
-            double err2 = d_el*d_el + d_az*d_az;
-
-            double log_likelihood = -0.5 * err2 / (sigma*sigma);
-
-            log_w += log_likelihood;
+                // ===== 2. ANGLE LIKELIHOOD (MAIN) =====
+                    Eigen::Vector3d cam_pos = cam->getPosition();
+        
+                    Eigen::Vector3d d = pos - cam_pos;
+        
+                    double dx = d.x();
+                    double dy = d.y();
+                    double dz = d.z();
+        
+                    double r = std::sqrt(dx*dx + dz*dz + 1e-6);
+        
+                    double pred_el = std::atan2(dy, r);
+                    double pred_az = std::atan2(dx, dz);
+        
+                    auto ang = cam->get_total_object_to_cam_angles();
+        
+                    double d_el = pred_el - ang.elevation;
+                    double d_az = pred_az - ang.azimuth;
+        
+                    normalize_angle(d_az);
+        
+                    double err2 = d_el*d_el + d_az*d_az;
+        
+                    double log_likelihood = -0.5 * err2 / (sigma*sigma);
+        
+                    log_w += log_likelihood;
+                }
+            }    
         }
-
-        // ===== 2. FOV constraint (secondary) =====
-        for (auto* cam : visible_cams)
-        {
-            bool inside = is_point_inside_polyhedron(
-                cam->get_FOV(), Point(pos.x(), pos.y(), pos.z()));
-
-            log_w += inside ? 0.0 : std::log(1e-3);
-        }
-
-        for (auto* cam : hidden_cams)
-        {
-            bool inside = is_point_inside_polyhedron(
-                cam->get_FOV(), Point(pos.x(), pos.y(), pos.z()));
-
-            log_w += inside ? std::log(1e-2) : 0.0;
+        if(hidden_cams.size() != 0){
+            // for (auto* cam : hidden_cams)
+            // {
+            //     bool inside = is_point_inside_polyhedron(
+            //         cam->get_FOV(), Point(pos.x(), pos.y(), pos.z()));
+    
+            //     log_w += inside ? std::log(1e-2) : 0.0;
+            // }
+            /*only penaltize particle once*/
+            bool is_in_any_hidden_fov = false;
+            for (auto* cam : hidden_cams) {
+                if (is_point_inside_polyhedron(cam->get_FOV(), Point(pos.x(), pos.y(), pos.z()))) {
+                    is_in_any_hidden_fov = true;
+                    break; 
+                }
+            }
+            if (is_in_any_hidden_fov) log_w += std::log(0.1);
         }
 
         log_weights[i] = log_w;
     }
 
     // ===== normalize (log-sum-exp) =====
-    double max_log = *std::max_element(log_weights.begin(), log_weights.end());
-
-    double sum = 0;
-
-    for (size_t i = 0; i < particles.size(); i++)
-    {
-        particles[i].weight = std::exp(log_weights[i] - max_log);
-        sum += particles[i].weight;
-    }
-
-    for (auto& p : particles)
-        p.weight /= (sum + 1e-12);
-}
-
-void ParticleFilter::update_weights(
-        std::vector<Camera*>& visible_cams,
-        std::vector<Camera*>& hidden_cams)
-{
-    const double Pd = 0.9; // detection probability
-    const double Pf = 0.1; // false detection probability
-
-    std::vector<double> log_weights(particles.size());
-
-    for (size_t i = 0; i < particles.size(); i++)
-    {
-        auto& p = particles[i];
-
-        Point pos(p.x(0), p.x(3), p.x(6));
-
-        double log_w = std::log(p.weight + 1e-12);
-
-        // camera sees object
-        for (auto* cam : visible_cams)
-        {
-            bool inside = is_point_inside_polyhedron(cam->get_FOV(),pos);
-
-            double likelihood = inside ? Pd : Pf;
-
-            log_w += std::log(likelihood);
-        }
-
-        // camera does not see object
-        for (auto* cam : hidden_cams)
-        {
-            bool inside = is_point_inside_polyhedron(cam->get_FOV(),pos);
-
-            double likelihood = inside ? (1.0 - Pd) : (1.0 - Pf);
-
-            log_w += std::log(likelihood);
-        }
-
-        log_weights[i] = log_w;
-    }
-
-    // normalize (log-sum-exp)
     double max_log = *std::max_element(log_weights.begin(), log_weights.end());
 
     double sum = 0;
@@ -578,22 +548,25 @@ void rotate_cameras(
 void compute_gmm_stats(
     const std::vector<Particle>& particles,
     const std::vector<int>& labels,
-    int K,
+    int K, /*K clusters/components*/
     std::vector<GaussianComponent>& gmm)
 {
     int N = particles.size();
     int dim = particles[0].x.size();
 
+    /*sum of weights in each cluster/component */
     std::vector<double> weight_sum(K, 0.0);
 
     // ===== Mean =====
+    /*Loop in each particle to compute new gmm centroid position 
+    gmm[k].mean = \dfrac{\sum_{i=0}^N w^{(i)}_k \chi{(i)}_k}{\sum_{i=0}^N w^{(i)}_k }    */
     for (int i = 0; i < N; ++i)
     {
-        int k = labels[i];
+        int k = labels[i]; /*get label of particle [i]*/
         double w = particles[i].weight;
 
-        gmm[k].mean += w * particles[i].x;
-        weight_sum[k] += w;
+        gmm[k].mean += w * particles[i].x; /* \sum_{i=0}^N w^{(i)}_k \chi{(i)}_k*/
+        weight_sum[k] += w; /*\sum_{i=0}^N w^{(i)}_k */
     }
 
     for (int k = 0; k < K; ++k)
@@ -603,13 +576,15 @@ void compute_gmm_stats(
     }
 
     // ===== Covariance =====
+    /*gmm[k].cov = \dfrac{\sum_{i=0}^N w^{(i)}_k (\chi{(i)}_k - \muy_k) (\chi{(i)}_k - \muy_k)^T}
+                        {\sum_{i=0}^N w^{(i)}_k }    */
     for (int i = 0; i < N; ++i)
     {
         int k = labels[i];
         double w = particles[i].weight;
 
         Eigen::VectorXd diff = particles[i].x - gmm[k].mean;
-        gmm[k].cov += w * diff * diff.transpose();
+        gmm[k].cov += w * diff * diff.transpose(); /*\sum_{i=0}^N w^{(i)}_k (\chi{(i)}_k - \muy_k) (\chi{(i)}_k - \muy_k)^T*/
     }
 
     for (int k = 0; k < K; ++k)
@@ -665,7 +640,7 @@ std::vector<int> weighted_kmeans(
             cov_inv[k] = covs[k].inverse();
         }
 
-        // ===== Assign step (Mahalanobis) =====
+        // ===== Assign step (Mahalanobis = (\chi^{(i)}_k - \muy_k)^T * P^{-1} * (\chi^{(i)}_k - \muy_k)) =====
         for (int i = 0; i < N; ++i)
         {
             double best_dist = 1e18;
@@ -784,34 +759,65 @@ std::vector<GaussianComponent> fit_gmm_em(
     for (int iter = 0; iter < max_iters; ++iter)
     {
         // ===== Precompute =====
-        std::vector<Eigen::MatrixXd> cov_inv(K);
-        std::vector<double> norm_const(K);
+        // ===== Precompute (LLT + log det) =====
+        std::vector<Eigen::LLT<Eigen::MatrixXd>> llt(K);
+        std::vector<double> log_det(K);
 
         for (int k = 0; k < K; ++k)
         {
-            cov_inv[k] = gmm[k].cov.inverse();
-            double det = gmm[k].cov.determinant();
-            norm_const[k] = 1.0 / std::sqrt(std::pow(2*M_PI, dim) * det);
+            llt[k].compute(gmm[k].cov);
+
+            if (llt[k].info() != Eigen::Success)
+            {
+                // fallback: thêm regularization
+                gmm[k].cov += 1e-6 * Eigen::MatrixXd::Identity(dim, dim);
+                llt[k].compute(gmm[k].cov);
+            }
+
+            const auto& L = llt[k].matrixL();
+
+            double logdet = 0.0;
+            for (int d = 0; d < dim; ++d)
+                logdet += std::log(L(d, d));
+
+            log_det[k] = 2.0 * logdet;
         }
 
         // ===== E-step =====
+       const double log_2pi = std::log(2.0 * M_PI);
+
         for (int i = 0; i < N; ++i)
         {
-            double sum = 0.0;
+            double max_log = -1e18;
 
+            // ===== Compute log-probabilities =====
             for (int k = 0; k < K; ++k)
             {
                 Eigen::VectorXd diff = particles[i].x - gmm[k].mean;
 
-                double exponent = -0.5 * diff.transpose()
-                    * cov_inv[k] * diff;
+                // Solve Σ^{-1} * diff using LLT
+                Eigen::VectorXd sol = llt[k].solve(diff);
 
-                double prob = gmm[k].weight *
-                              norm_const[k] *
-                              std::exp(exponent);
+                // Mahalanobis distance
+                double mahal = diff.dot(sol);
 
-                gamma(i, k) = prob;
-                sum += prob;
+                // Log Gaussian probability
+                double log_prob =
+                    std::log(gmm[k].weight + 1e-12)
+                    - 0.5 * (dim * log_2pi + log_det[k] + mahal);
+
+                gamma(i, k) = log_prob;
+
+                if (log_prob > max_log)
+                    max_log = log_prob;
+            }
+
+            // ===== Log-Sum-Exp normalization =====
+            double sum = 0.0;
+            for (int k = 0; k < K; ++k)
+            {
+                gamma(i, k) = std::exp(gamma(i, k) - max_log);
+                sum += gamma(i, k);
             }
 
             gamma.row(i) /= (sum + 1e-12);
@@ -836,7 +842,7 @@ std::vector<GaussianComponent> fit_gmm_em(
 
             for (int i = 0; i < N; ++i)
             {
-                double g = gamma(i, k) * particles[i].weight;
+                 double g = gamma(i, k) * particles[i].weight;
                 Eigen::VectorXd diff = particles[i].x - mean;
                 cov += g * diff * diff.transpose();
             }
