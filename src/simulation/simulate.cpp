@@ -175,7 +175,7 @@ void Simulation::do_simulate(){
     }
 
     ParticleFilter pf(PF_PARTICLES_NUMBER); /*gen 500 particles*/
-    UnscentedKalmanFilter ukf(ALG_PROCESSING_TIMESTEP, ACC_DEVIATION, MEASUREMENT_DEVIATION);
+    UnscentedKalmanFilter ukf(ACC_DEVIATION, MEASUREMENT_DEVIATION);
     bool is_initialized = false;  /* for initializing ukf state and pf state*/
     int one_cam_seen_obj_frame_count = 0; /*Scan if only one camera sees object continously*/
 
@@ -307,7 +307,7 @@ void Simulation::do_simulate(){
                     is_initialized = true;
                 }
 
-                ukf.predict(); /*answer "if there is no n */                                    
+                ukf.predict(ALG_PROCESSING_TIMESTEP); /*answer "if there is no n */                                    
                 if(cameras_seen_obj > 0){
                     ukf.update(obj_visible_cameras); /*best estimation right now & answer "what measurements think about state we've predicted yet"*/
                 }
@@ -431,7 +431,8 @@ void Simulation::do_simulate(){
                 }
 
                 /*predict and update based on gaussian state pf*/
-                pf.predict(ukf.getFMatrix(), ukf.getQMatrix());
+                
+                pf.predict(ALG_PROCESSING_TIMESTEP, ACC_DEVIATION);
                 pf.update_weights_focus(obj_visible_cameras, obj_hidden_cameras);
                 
                 /*========= NEW KMEANS CLUSTERING ================*/
@@ -461,31 +462,43 @@ void Simulation::do_simulate(){
                 if (reacquire_mode == SEARCH_MODE)
                 {
                     is_require_state_initialized = false;
-                    // ===== GMM =====
-                    auto gmm = fit_gmm_em(pf.get_particles(), CLUSTERING_NUMBER, 5);
-
-                    // sort hypotheses based on weight
-                    std::vector<int> order(gmm.size());
-                    std::iota(order.begin(), order.end(), 0); /*create a list of hypotheses*/
-
-                    std::sort(order.begin(), order.end(),
-                            [&](int a, int b){
-                                return gmm[a].weight > gmm[b].weight;
-                            });
-
-                    // assign mỗi camera 1 hypothesis khác nhau
-                    for (int i = 0; i < obj_hidden_cameras.size(); ++i)
-                    {
-                        int k = order[i % gmm.size()];
-
+                    /*============= weighted k means ==============*/
+                    auto hypotheses = weighted_kmeans_return_centers(pf.get_particles(), CLUSTERING_NUMBER, 5, 1e-4);
+                    for(int i = 0; i < obj_hidden_cameras.size(); i++){
+                        int k = i % CLUSTERING_NUMBER;
                         Eigen::Vector3d target(
-                            gmm[k].mean(0),
-                            gmm[k].mean(3),
-                            gmm[k].mean(6));
-
+                            hypotheses[k](0),
+                            hypotheses[k](3),
+                            hypotheses[k](6)
+                        );
                         auto* cam = obj_hidden_cameras[i];
                         cam->rotate_to_direction_vector(target - cam->getPosition());
                     }
+                    // ===== GMM =====
+                    // auto gmm = fit_gmm_em(pf.get_particles(), CLUSTERING_NUMBER, 5);
+
+                    // // sort hypotheses based on weight
+                    // std::vector<int> order(gmm.size());
+                    // std::iota(order.begin(), order.end(), 0); /*create a list of hypotheses*/
+
+                    // std::sort(order.begin(), order.end(),
+                    //         [&](int a, int b){
+                    //             return gmm[a].weight > gmm[b].weight;
+                    //         });
+
+                    // // assign mỗi camera 1 hypothesis khác nhau
+                    // for (int i = 0; i < obj_hidden_cameras.size(); ++i)
+                    // {
+                    //     int k = order[i % gmm.size()];
+
+                    //     Eigen::Vector3d target(
+                    //         gmm[k].mean(0),
+                    //         gmm[k].mean(3),
+                    //         gmm[k].mean(6));
+
+                    //     auto* cam = obj_hidden_cameras[i];
+                    //     cam->rotate_to_direction_vector(target - cam->getPosition());
+                    // }
                     temp_det_rmse_list.push_back(rmse_frame);
                 }
 
@@ -519,7 +532,6 @@ void Simulation::do_simulate(){
                 }
                 
                 /*============= FOR PLOTTING ===============*/
-                auto state_pf = pf.get_estimated_state();
                 Eigen::VectorXd x_cur = pf.get_estimated_state();
                 double px = x_cur(0);
                 double py = x_cur(3);
@@ -546,7 +558,7 @@ void Simulation::do_simulate(){
                  /*export json for plotting FOV of cameras information at the beginning*/
                 if(!is_json_pf){
                     const Point obj_p(current_position(0), current_position(1), current_position(2));
-                    const Point est_p(state_pf(0),state_pf(3), state_pf(6));
+                    const Point est_p(x_cur(0),x_cur(3), x_cur(6));
 
                     std::vector<Polyhedron> fov_polys;
                     for(auto &cam: cameras){
@@ -563,9 +575,10 @@ void Simulation::do_simulate(){
                     reacquire_frame_count = 0;
                     state = TRACKING_STATE;
                     result.number_recover_from_reacquire++;
-                    GaussState conv_state = pf.compute_ellipsoid_cov(focus_target);
-                    ukf.setState(conv_state.mean);
-                    ukf.setCovariance(conv_state.covariance);
+                    Eigen::MatrixXd pf_covariance = pf.compute_ellipsoid_cov();
+                    std::cout << "it can run till here\n";
+                    ukf.setState(x_cur);
+                    ukf.setCovariance(pf_covariance);
                     is_json_pf = true;
                     lost_frame_info.isSuccess = true;
                     lost_frame_list_info.push_back(lost_frame_info);

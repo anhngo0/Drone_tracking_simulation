@@ -124,8 +124,6 @@ class Camera {
 
         Eigen::Vector3d getPosition() const;
 
-        CameraAngles get_half_fov_angles() const;
-
         void initial_fov();
 
         CameraAngles calculate_angles_to(Point target_p);
@@ -133,10 +131,13 @@ class Camera {
         
 };
 
+void rotate_cameras(
+    std::vector<Camera*> &cameras, 
+    const Eigen::Vector3d target_pos);
 
 Polyhedron calculate_total_intersection(const std::vector<Camera*>& cam_list);
 
 /*This function is used for converting 
 CGAL::Point3 type to Eigen::Vector3d type*/
-Eigen::Vector3d toEigen(const Point& p);
+// Eigen::Vector3d toEigen(const Point& p);
 

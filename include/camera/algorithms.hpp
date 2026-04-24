@@ -18,6 +18,7 @@ struct GaussState {
 /*angle (rad) | 0.001 rad \approx 0.0573 deg, when convert to pixel, it approximates 80pix,
  0.01745 rad \approx 1 deg , 1396 pixel */
 const double MEASUREMENT_DEVIATION =  0.026175; 
+// const double MEASUREMENT_DEVIATION =  0.00873; 
 
 class UnscentedKalmanFilter {
 public:
@@ -27,9 +28,9 @@ public:
      * @param sigma_a acceleration covariance (m/s^2)
      * @param sigma_meas measurement (angle) covariance (rad)
      */
-    UnscentedKalmanFilter(double dt, double sigma_a, double sigma_meas);
+    UnscentedKalmanFilter(double sigma_a, double sigma_meas);
 
-    void predict();
+    void predict(double dt);
 
     void update(std::vector<Camera*>& cameras);
 
@@ -40,7 +41,7 @@ public:
 
     Eigen::MatrixXd getQMatrix() const { return Q; }
 
-    GaussState getLeadState(double t, double sigma_a);
+    GaussState getLeadState(double t);
    
     void setState(const Eigen::VectorXd& new_x) { x = new_x; }
     void setCovariance (const Eigen::MatrixXd& new_Cov){P = new_Cov;}
@@ -49,7 +50,8 @@ private:
 
     int n_x;   // state dimensions (9)
     int n_sig; //  Sigma points (2*n_x + 1)
-    double dt;
+    // double dt;
+    double sigma_a;
 
     Eigen::VectorXd x; // state: [px, vx, ax, py, vy, ay, pz, vz, az]
     Eigen::MatrixXd P; 
@@ -110,7 +112,7 @@ public:
         const Eigen::MatrixXd& ukf_P
     );
 
-    void predict(const Eigen::MatrixXd& F, const Eigen::MatrixXd& Q);
+    void predict(const double dt, const double sigma_a);
 
     void resample_if_needed();
     void resample_from_gmm(const std::vector<GaussianComponent>& gmm);
@@ -124,21 +126,12 @@ public:
     /*For rotating object hidden camera*/
     std::vector<Particle> get_particles(){return particles;};
 
-    // void update_weights(
-    // std::vector<Camera*>& visible_cams,
-    // std::vector<Camera*>& hidden_cams
-    // );
-
     void update_weights_focus(
     std::vector<Camera*>& visible_cams,
     std::vector<Camera*>& hidden_cams);
 
-    GaussState compute_ellipsoid_cov(Eigen::Vector3d target);
+    Eigen::MatrixXd compute_ellipsoid_cov();
 };
-    
-void rotate_cameras(
-    std::vector<Camera*> &cameras, 
-    const Eigen::Vector3d target_pos);
 
 /*============================================*/
 /*============  PARTICLE FILTER ==============*/
@@ -150,6 +143,12 @@ std::vector<int> weighted_kmeans(
     int max_iters,
     double tol
 );
+
+std::vector<Eigen::VectorXd> weighted_kmeans_return_centers(
+    const std::vector<Particle>& particles,
+    int K,
+    int max_iters ,
+    double tol);
 
 std::vector<GaussianComponent> fit_gmm_from_particles(
     const std::vector<Particle>& particles,

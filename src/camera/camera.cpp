@@ -189,18 +189,6 @@ Polyhedron Camera::get_FOV() const {
     return transformed_fov;
 }
 
-CameraAngles Camera::get_half_fov_angles() const {
-    CameraAngles angles;
-
-    angles.azimuth =
-        std::atan(sensor_w / (2.0 * focal_length)) ;
-
-    angles.elevation =
-        std::atan(sensor_h / (2.0 * focal_length));
-
-    return angles;
-}
-
 CameraAngles Camera::calculate_angles_to(Point target) {
     Eigen::Vector3d dir = toEigen(target) - toEigen(position);
     CameraAngles ang;
@@ -209,16 +197,6 @@ CameraAngles Camera::calculate_angles_to(Point target) {
     ang.elevation = std::atan2(dir.y(), horizontal_dist);
     return ang;
 }
-
-// void Camera::rotate_to_direction_vector(Eigen::Vector3d dir_vect){
-//     CameraAngles ang;
-//     ang.azimuth = std::atan2(dir_vect.x(), dir_vect.z()) ;
-//     double horizontal_dist = std::sqrt(dir_vect.x()*dir_vect.x() + dir_vect.z()*dir_vect.z());
-//     ang.elevation = std::atan2(dir_vect.y(), horizontal_dist) ;
-
-//     cam_angles.azimuth = ang.azimuth;
-//     cam_angles.elevation = ang.elevation;
-// }
 
 void Camera::rotate_to_direction_vector(Eigen::Vector3d dir_vect)
 {
@@ -267,6 +245,19 @@ Eigen::Vector3d Camera::get_camera_direction(){
 
     Eigen::Vector3d forward(vx, vy, vz);
     return forward;
+}
+
+/*=================================================================*/
+/*================ For rotating cameras ====================*/
+
+void rotate_cameras(
+    std::vector<Camera*> &cameras, 
+    const Eigen::Vector3d target_pos)
+{
+    for(Camera* camera: cameras){
+        Eigen::Vector3d dir = target_pos - camera->getPosition();
+        camera->rotate_to_direction_vector(dir);
+    }
 }
 
 /*========================================================*/

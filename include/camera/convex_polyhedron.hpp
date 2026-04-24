@@ -72,7 +72,5 @@ struct Tetrahedron {
     double volume;
 };
 
-ScalarFunction make_gaussian_function(Point mean, double delta);
-
 Point find_volume_centroid(Polyhedron& poly);
 
